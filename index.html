@@ -3,68 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Painel do ESP32</title>
+  <title>Painel do ESP32 - Controle e Peso</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin-top: 40px; background-color: #f4f4f9; }
-    h1 { color: #333; }
-    .btn { padding: 15px 30px; font-size: 18px; margin: 10px; border: none; cursor: pointer; border-radius: 5px; }
-    .on { background-color: #4CAF50; color: white; }
-    .off { background-color: #f44336; color: white; }
-    .sensor-card { background: white; padding: 20px; display: inline-block; border-radius: 10px; margin-top: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    .val { font-size: 32px; font-weight: bold; color: #007bff; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #121212;
+      color: #ffffff;
+      padding: 20px;
+    }
+    h1 {
+      color: #00bcd4;
+      margin-bottom: 30px;
+    }
+    .card {
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      padding: 25px;
+      max-width: 380px;
+      margin: 0 auto 20px auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    button {
+      font-size: 16px;
+      padding: 12px 24px;
+      margin: 8px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+    .btn-on { background-color: #4CAF50; color: white; }
+    .btn-off { background-color: #f44336; color: white; }
+    button:hover { opacity: 0.85; }
+    .val-main {
+      font-size: 32px;
+      font-weight: bold;
+      margin-top: 10px;
+      color: #00bcd4;
+    }
+    .val-sub {
+      font-size: 14px;
+      color: #888888;
+      margin-top: 5px;
+    }
+    .bar-container {
+      background-color: #333333;
+      border-radius: 10px;
+      height: 20px;
+      width: 100%;
+      margin-top: 15px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      background-color: #00bcd4;
+      height: 100%;
+      width: 0%;
+      transition: width 0.5s ease-in-out;
+    }
   </style>
 </head>
 <body>
 
-  <h1>Controle do LED</h1>
-  <button class="btn on" onclick="mudarEstado(1)">LIGAR</button>
-  <button class="btn off" onclick="mudarEstado(0)">DESLIGAR</button>
-  <p id="status">Status: Aguardando ação...</p>
+  <h1>Painel de Monitoramento ESP32</h1>
 
-  <hr style="max-width: 400px; margin: 30px auto;">
+  <!-- BLOCO 1: LIGA / DESLIGA LED -->
+  <div class="card">
+    <h2>Controle do LED</h2>
+    <button class="btn-on" onclick="setLed(1)">LIGAR</button>
+    <button class="btn-off" onclick="setLed(0)">DESLIGAR</button>
+  </div>
 
-  <div class="sensor-card">
-    <h2>Nível do Sensor</h2>
-    <div class="val" id="distancia">-- %</div>
+  <!-- BLOCO 2: PORCENTAGEM DE PESO (SENSOR ULTRASSÔNICO) -->
+  <div class="card">
+    <h2>Nível de Peso Atual</h2>
+    <div id="porcentagem-val" class="val-main">--%</div>
+    <div id="distancia-sub" class="val-sub">Lendo distância...</div>
+    
+    <!-- Barra de progresso visual do nível -->
+    <div class="bar-container">
+      <div id="bar-fill" class="bar-fill"></div>
+    </div>
   </div>
 
   <script>
-    const DB_URL = "https://led-status-65919-default-rtdb.asia-southeast1.firebasedatabase.app";
-    const DB_AUTH = "BxKKfrqvwwVtHS1dUojCWyLvbrGSpsQcqgzhe4Po";
+    const FIREBASE_URL = "https://led-status-65919-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-    function mudarEstado(valor) {
-      fetch(`${DB_URL}/led/led_status.json?auth=${DB_AUTH}`, {
-        method: 'PUT',
-        body: JSON.stringify(valor)
+    // 1. ALTERA O STATUS DO LED NO FIREBASE
+    function setLed(val) {
+      fetch(`${FIREBASE_URL}/led/led_status.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(val)
       })
       .then(res => res.json())
-      .then(data => {
-        document.getElementById('status').innerText = "Status atualizado para: " + data;
-      });
+      .then(data => console.log("LED atualizado no Firebase:", data))
+      .catch(err => console.error("Erro ao alterar LED:", err));
     }
 
-    // Função que converte a distância do Firebase para Porcentagem a cada 2 segundos
+    // 2. LÊ A DISTÂNCIA E CONVERTE EM PORCENTAGEM DE PESO
     function lerSensor() {
-      fetch(`${DB_URL}/sensor/distancia.json?auth=${DB_AUTH}`)
+      fetch(`${FIREBASE_URL}/sensor/distancia.json`)
       .then(res => res.json())
-      .then(dist => {
-        if(dist !== null) {
-          // Define a distância máxima total considerada (ex: 200 cm)
-          const distMaxima = 200; 
+      .then(distancia => {
+        if (distancia !== null && distancia !== undefined) {
+          // --- CONFIGURAÇÃO DA CONVERSÃO DE DISTÂNCIA PARA PESO ---
+          // Exemplo: Quando o reservatório/balança está vazio, a distância até o sensor é MAIOR (ex: 100 cm = 0%).
+          // Quando está cheio/com peso máximo, a distância é MENOR (ex: 10 cm = 100%).
+          const distVazio = 100;  // Distância em cm quando o peso é 0%
+          const distCheio = 10;   // Distância em cm quando o peso é 100%
 
-          // Calcula a porcentagem (0% a 100%)
-          let porcentagem = Math.round((dist / distMaxima) * 100);
+          // Cálculo da porcentagem
+          let pesoPct = Math.round(((distVazio - distancia) / (distVazio - distCheio)) * 100);
 
-          // Garante que o valor fique entre 0 e 100
-          if (porcentagem > 100) porcentagem = 100;
-          if (porcentagem < 0) porcentagem = 0;
+          // Limita entre 0% e 100%
+          if (pesoPct > 100) pesoPct = 100;
+          if (pesoPct < 0) pesoPct = 0;
 
-          document.getElementById('distancia').innerText = porcentagem + " %";
+          // Atualiza a tela
+          document.getElementById("porcentagem-val").innerText = `${pesoPct}%`;
+          document.getElementById("distancia-sub").innerText = `Distância medida: ${distancia} cm`;
+          document.getElementById("bar-fill").style.width = `${pesoPct}%`;
         }
-      });
+      })
+      .catch(err => console.error("Erro ao ler dados do sensor:", err));
     }
 
-    setInterval(lerSensor, 2000);
+    // Atualiza a leitura a cada 1 segundo
+    setInterval(lerSensor, 1000);
+    lerSensor();
   </script>
 
 </body>
