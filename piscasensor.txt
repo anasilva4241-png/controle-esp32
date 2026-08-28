@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle do ESP32</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #121212;
+      color: #ffffff;
+      padding: 30px;
+    }
+    .card {
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      padding: 25px;
+      max-width: 400px;
+      margin: 0 auto 20px auto;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    button {
+      font-size: 18px;
+      padding: 12px 24px;
+      margin: 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-on { background-color: #4CAF50; color: white; }
+    .btn-off { background-color: #f44336; color: white; }
+    .status-box {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 15px;
+      color: #00bcd4;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Controle de Automação ESP32</h1>
+
+  <div class="card">
+    <h2>Controle do LED</h2>
+    <button class="btn-on" onclick="setLed(1)">LIGAR</button>
+    <button class="btn-off" onclick="setLed(0)">DESLIGAR</button>
+  </div>
+
+  <div class="card">
+    <h2>Nível do Sensor</h2>
+    <div id="sensor-val" class="status-box">Aguardando dados...</div>
+  </div>
+
+  <script>
+    const FIREBASE_URL = "https://led-status-65919-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+    // Função para alterar o status do LED no Firebase
+    function setLed(val) {
+      fetch(`${FIREBASE_URL}/led/led_status.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(val)
+      })
+      .then(res => res.json())
+      .then(data => console.log("LED atualizado:", data))
+      .catch(err => console.error("Erro ao alterar LED:", err));
+    }
+
+    // Função para ler o valor do sensor continuamente
+    function lerSensor() {
+      fetch(`${FIREBASE_URL}/sensor/distancia.json`)
+      .then(res => res.json())
+      .then(distancia => {
+        if (distancia !== null && distancia !== undefined) {
+          // Exemplo: Converte a distância (cm) em porcentagem de 0 a 100%
+          // Ajuste os valores 10 (nível cheio) e 100 (nível vazio) de acordo com o seu projeto
+          let maxDist = 100;
+          let minDist = 10;
+          let pct = Math.round(((maxDist - distancia) / (maxDist - minDist)) * 100);
+          
+          if (pct > 100) pct = 100;
+          if (pct < 0) pct = 0;
+
+          document.getElementById("sensor-val").innerText = `${pct}% (${distancia} cm)`;
+        }
+      })
+      .catch(err => console.error("Erro ao ler sensor:", err));
+    }
+
+    // Atualiza a leitura do sensor a cada 1.5 segundos
+    setInterval(lerSensor, 1500);
+    lerSensor();
+  </script>
+
+</body>
+</html>
