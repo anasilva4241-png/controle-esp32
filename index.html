@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle do ESP32</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f9; }
+    h1 { color: #333; }
+    .btn { padding: 15px 30px; font-size: 18px; margin: 10px; border: none; cursor: pointer; border-radius: 5px; }
+    .on { background-color: #4CAF50; color: white; }
+    .off { background-color: #f44336; color: white; }
+  </style>
+</head>
+<body>
+
+  <h1>Controle do LED - ESP32</h1>
+  <button class="btn on" onclick="mudarEstado(1)">LIGAR</button>
+  <button class="btn off" onclick="mudarEstado(0)">DESLIGAR</button>
+
+  <p id="status">Status: Aguardando ação...</p>
+
+  <script>
+    const DB_URL = "https://led-status-65919-default-rtdb.asia-southeast1.firebasedatabase.app";
+    const DB_AUTH = "BxKKfrqvwwVtHS1dUojCWyLvbrGSpsQcqgzhe4Po";
+
+    function mudarEstado(valor) {
+      fetch(`${DB_URL}/led/led_status.json?auth=${DB_AUTH}`, {
+        method: 'PUT',
+        body: JSON.stringify(valor)
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('status').innerText = "Status atualizado para: " + data;
+      })
+      .catch(error => {
+        console.error('Erro:', error);
+        document.getElementById('status').innerText = "Erro ao atualizar!";
+      });
+    }
+  </script>
+
+</body>
+</html>
